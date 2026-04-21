@@ -5,104 +5,231 @@ Provides the main application window with navigation shell.
 """
 
 import customtkinter as ctk
-from typing import Optional
+from typing import Optional, Dict, Any
+import sys
+import os
+
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+
+from app.gui.pages import (
+    HomePage,
+    LibraryPage,
+    SourcesPage,
+    AutomationPage,
+    SettingsPage,
+    AboutPage
+)
+from app.gui.widgets import StatusBanner
+from app.gui.state import AppState
 
 
 class SemanticWallpaperApp(ctk.CTk):
     """Main application window for Semantic Wallpaper."""
-
+    
     def __init__(self):
         super().__init__()
-
-        # Configure window
+        
+        # Configure main window
         self.title("Semantic Wallpaper")
-        self.geometry("1024x768")
-        self.minsize(800, 600)
-
-        # Configure grid layout
+        self.geometry("1200x800")
+        self.minsize(900, 600)
+        
+        # Set theme
+        ctk.set_appearance_mode("System")
+        ctk.set_default_color_theme("blue")
+        
+        # Initialize state
+        self.state = AppState()
+        
+        # Configure grid
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
-
-        # Create navigation frame (left sidebar)
-        self._create_navigation()
-
+        
+        # Create navigation sidebar
+        self._create_sidebar()
+        
         # Create main content area
-        self.main_frame = ctk.CTkFrame(self)
-        self.main_frame.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
-
-        # Placeholder label for main content
-        self.placeholder_label = ctk.CTkLabel(
-            self.main_frame,
-            text="Welcome to Semantic Wallpaper\n\nApplication is under development.\nSelect a page from the navigation menu.",
-            font=ctk.CTkFont(size=18),
-        )
-        self.placeholder_label.pack(expand=True)
-
-        # Current page reference
-        self.current_page: Optional[ctk.CTkFrame] = None
-
-    def _create_navigation(self):
-        """Create left navigation sidebar with page buttons."""
-        self.nav_frame = ctk.CTkFrame(self, width=180, corner_radius=0)
-        self.nav_frame.grid(row=0, column=0, sticky="ns")
-        self.nav_frame.grid_propagate(False)
-
-        # Configure navigation grid
-        self.nav_frame.grid_rowconfigure(0, weight=1)
-        self.nav_frame.grid_rowconfigure(7, weight=1)
-
-        # Title
-        title_label = ctk.CTkLabel(
-            self.nav_frame,
+        self._create_content_area()
+        
+        # Create status banner
+        self._create_status_banner()
+        
+        # Load initial data
+        self._load_initial_data()
+    
+    def _create_sidebar(self):
+        """Create the left navigation sidebar."""
+        sidebar = ctk.CTkFrame(self, width=180, corner_radius=0)
+        sidebar.grid(row=0, column=0, sticky="ns")
+        sidebar.grid_rowconfigure(7, weight=1)
+        
+        # App logo/title
+        logo_label = ctk.CTkLabel(
+            sidebar,
             text="Semantic\nWallpaper",
-            font=ctk.CTkFont(size=16, weight="bold"),
+            font=("Arial", 18, "bold"),
+            justify="center"
         )
-        title_label.grid(row=0, column=0, pady=(20, 10), padx=10)
-
+        logo_label.grid(row=0, column=0, padx=10, pady=(20, 30))
+        
         # Navigation buttons
-        self.nav_buttons = {}
-        pages = [
-            ("Home", 1),
-            ("Library", 2),
-            ("Sources", 3),
-            ("Automation", 4),
-            ("Settings", 5),
-            ("About", 6),
+        nav_buttons = [
+            ("Home", self._show_home),
+            ("Library", self._show_library),
+            ("Sources", self._show_sources),
+            ("Automation", self._show_automation),
+            ("Settings", self._show_settings),
+            ("About", self._show_about)
         ]
-
-        for page_name, row in pages:
+        
+        self.nav_buttons = {}
+        
+        for i, (name, command) in enumerate(nav_buttons, start=1):
             btn = ctk.CTkButton(
-                self.nav_frame,
-                text=page_name,
-                command=lambda name=page_name: self._navigate_to(name),
+                sidebar,
+                text=name,
+                command=command,
+                width=160,
+                height=45,
                 anchor="w",
-                padx=15,
+                padx=20
             )
-            btn.grid(row=row, column=0, pady=5, padx=10, sticky="ew")
-            self.nav_buttons[page_name] = btn
-
-        # Select Home by default
-        self._navigate_to("Home")
-
-    def _navigate_to(self, page_name: str):
-        """Navigate to a specific page."""
-        # Clear current page content
-        for widget in self.main_frame.winfo_children():
-            widget.destroy()
-
-        # Update button states
-        for name, btn in self.nav_buttons.items():
-            if name == page_name:
-                btn.configure(fg_color=("gray75", "gray25"))
-            else:
-                btn.configure(fg_color=("transparent", "transparent"))
-
-        # Show placeholder for now (will be replaced with actual pages)
-        label = ctk.CTkLabel(
-            self.main_frame,
-            text=f"{page_name} Page\n\nContent coming soon...",
-            font=ctk.CTkFont(size=20),
+            btn.grid(row=i, column=0, padx=10, pady=5)
+            self.nav_buttons[name.lower()] = btn
+        
+        # Initially show home button as active
+        self._set_active_button("home")
+    
+    def _create_content_area(self):
+        """Create the main content area."""
+        self.content_frame = ctk.CTkFrame(self, corner_radius=0)
+        self.content_frame.grid(row=0, column=1, sticky="nsew")
+        self.content_frame.grid_columnconfigure(0, weight=1)
+        self.content_frame.grid_rowconfigure(0, weight=1)
+        
+        # Initialize pages
+        self.pages: Dict[str, Any] = {}
+        
+        self.pages["home"] = HomePage(
+            self.content_frame,
+            on_change_now=self._on_change_wallpaper
         )
-        label.pack(expand=True)
+        self.pages["library"] = LibraryPage(
+            self.content_frame,
+            on_select=self._on_set_wallpaper,
+            on_delete=self._on_delete_wallpaper
+        )
+        self.pages["sources"] = SourcesPage(
+            self.content_frame,
+            on_download=self._on_download_wallpapers
+        )
+        self.pages["automation"] = AutomationPage(
+            self.content_frame,
+            on_install=self._on_install_task,
+            on_remove=self._on_remove_task,
+            on_test=self._on_test_automation
+        )
+        self.pages["settings"] = SettingsPage(
+            self.content_frame,
+            on_save=self._on_save_settings
+        )
+        self.pages["about"] = AboutPage(self.content_frame)
+        
+        # Show home page initially
+        self._show_home()
+    
+    def _create_status_banner(self):
+        """Create the bottom status banner."""
+        self.status_banner = StatusBanner(self)
+        self.status_banner.grid(row=1, column=0, columnspan=2, sticky="ew")
+    
+    def _load_initial_data(self):
+        """Load initial application data."""
+        self.state.set_status("Ready")
+        self.status_banner.set_status("Ready", "green")
+    
+    def _set_active_button(self, page_name: str):
+        """Set the active navigation button."""
+        for name, btn in self.nav_buttons.items():
+            if name == page_name.lower():
+                btn.configure(fg_color="#3498db")
+            else:
+                btn.configure(fg_color="transparent", hover_color="#2c3e50")
+    
+    def _clear_content(self):
+        """Clear the content area."""
+        for page in self.pages.values():
+            page.grid_forget()
+    
+    def _show_page(self, page_name: str):
+        """Show a specific page."""
+        self._clear_content()
+        self.pages[page_name].grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
+        self._set_active_button(page_name)
+    
+    def _show_home(self):
+        """Show the home page."""
+        self._show_page("home")
+    
+    def _show_library(self):
+        """Show the library page."""
+        self._show_page("library")
+    
+    def _show_sources(self):
+        """Show the sources page."""
+        self._show_page("sources")
+    
+    def _show_automation(self):
+        """Show the automation page."""
+        self._show_page("automation")
+    
+    def _show_settings(self):
+        """Show the settings page."""
+        self._show_page("settings")
+    
+    def _show_about(self):
+        """Show the about page."""
+        self._show_page("about")
+    
+    def _on_change_wallpaper(self):
+        """Handle change wallpaper action."""
+        self.status_banner.set_status("Changing wallpaper...", "blue")
+    
+    def _on_set_wallpaper(self, item: dict):
+        """Handle set wallpaper from library."""
+        self.status_banner.set_status(f"Setting: {item.get('name', 'Unknown')}", "blue")
+    
+    def _on_delete_wallpaper(self, item: dict):
+        """Handle delete wallpaper action."""
+        pass
+    
+    def _on_download_wallpapers(self, categories: list, amount: int, min_resolution: str):
+        """Handle download wallpapers action."""
+        self.status_banner.set_status("Downloading wallpapers...", "blue")
+    
+    def _on_install_task(self, interval: str):
+        """Handle install scheduled task."""
+        self.status_banner.set_status(f"Installing task ({interval})...", "blue")
+    
+    def _on_remove_task(self):
+        """Handle remove scheduled task."""
+        self.status_banner.set_status("Removing task...", "blue")
+    
+    def _on_test_automation(self):
+        """Handle test automation action."""
+        self.status_banner.set_status("Testing automation...", "blue")
+    
+    def _on_save_settings(self):
+        """Handle save settings action."""
+        self.status_banner.set_status("Settings saved", "green")
 
-        self.current_page = label
+
+def run_app():
+    """Run the application."""
+    app = SemanticWallpaperApp()
+    app.mainloop()
+
+
+if __name__ == "__main__":
+    run_app()
