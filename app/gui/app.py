@@ -92,8 +92,7 @@ class SemanticWallpaperApp(ctk.CTk):
                 command=command,
                 width=160,
                 height=45,
-                anchor="w",
-                padx=20
+                anchor="w"
             )
             btn.grid(row=i, column=0, padx=10, pady=5)
             self.nav_buttons[name.lower()] = btn
@@ -165,7 +164,7 @@ class SemanticWallpaperApp(ctk.CTk):
     def _show_page(self, page_name: str):
         """Show a specific page."""
         self._clear_content()
-        self.pages[page_name].grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
+        self.pages[page_name].grid(row=0, column=0, sticky="nsew")
         self._set_active_button(page_name)
     
     def _show_home(self):
